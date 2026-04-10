@@ -86,7 +86,7 @@ pipeline {
                     // ================= FIX: NO JsonSlurper =================
                     def clean = uploadResponse.replaceAll("(?s).*?(\\{.*\\}).*", "\$1")
 
-                    def hashMatch = clean =~ /"hash"\\s*:\\s*"([a-f0-9]+)"/
+                    def hashMatch = uploadResponse =~ /hash"\s*:\s*"([^"]+)"/
 
                     if (!hashMatch.find()) {
                         error "❌ Upload failed"
