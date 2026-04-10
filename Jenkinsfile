@@ -11,6 +11,7 @@ pipeline {
 
         AVD_NAME     = "Pixel_4_XL"
 
+        // 🔥 APK dari repo (bukan build)
         APK_PATH     = "test-apk/newcity-testing.apk"
         APP_PACKAGE  = "com.dhilla.newcity"
 
@@ -21,38 +22,30 @@ pipeline {
     stages {
 
         // ================= CHECKOUT =================
-        stage('Checkout Code') {
+        stage('Checkout') {
             steps {
-                deleteDir()              // clean workspace
-                checkout scm             // 🔥 WAJIB
+                deleteDir()
+                git branch: 'main', url: 'https://github.com/nissrinayy/newcity-testing'
             }
         }
 
-        // ================= DEBUG FILE =================
-        stage('Verify Files') {
+        // ================= DEBUG (WAJIB biar gak halu) =================
+        stage('Debug APK Path') {
             steps {
-                bat 'echo === WORKSPACE ==='
-                bat 'cd'
-                bat 'dir /s /b'
+                bat 'echo === SEARCH APK ==='
+                bat 'dir /s /b *.apk'
             }
         }
 
-        // ================= VALIDATE APK =================
+        // ================= VALIDATE =================
         stage('Validate APK') {
             steps {
                 script {
                     if (!fileExists(env.APK_PATH)) {
-                        error "❌ APK not found: ${env.APK_PATH}"
+                        error "❌ APK NOT FOUND: ${env.APK_PATH}"
                     }
-                    echo "✅ APK found!"
+                    echo "✅ APK found: ${env.APK_PATH}"
                 }
-            }
-        }
-
-        // ================= PREPARE =================
-        stage('Prepare Workspace') {
-            steps {
-                bat 'if not exist apk-outputs mkdir apk-outputs'
             }
         }
 
@@ -88,7 +81,7 @@ pipeline {
             }
         }
 
-        // ================= EMULATOR =================
+        // ================= START EMULATOR =================
         stage('Start Emulator') {
             steps {
                 bat """
@@ -98,31 +91,24 @@ pipeline {
                 """
 
                 sleep 60
-
                 bat "adb wait-for-device"
                 bat "adb shell getprop sys.boot_completed"
+
+                echo "✅ Emulator ready"
             }
         }
 
         // ================= INSTALL APK =================
         stage('Install APK') {
             steps {
-                script {
-                    def timestamp = new Date().format("dd-MM-yyyy_HH-mm-ss")
-                    def destPath  = "apk-outputs\\newcity-${timestamp}.apk"
-
-                    bat "copy \"${env.APK_PATH}\" \"${destPath}\""
-
-                    bat(script: "adb uninstall ${env.APP_PACKAGE}", returnStatus: true)
-                    bat "adb install -r \"${destPath}\""
-
-                    echo "✅ APK Installed"
-                }
+                bat "adb uninstall ${env.APP_PACKAGE} || echo not installed"
+                bat "adb install -r \"${env.APK_PATH}\""
+                echo "✅ APK installed"
             }
         }
 
         // ================= DAST =================
-        stage('DAST') {
+        stage('DAST - MobSF') {
             steps {
                 script {
                     bat """
@@ -132,11 +118,11 @@ pipeline {
                     ${env.MOBSF_URL}/api/v1/dynamic/start_analysis
                     """
 
-                    sleep 30
+                    sleep 20
 
-                    bat "adb shell monkey -p ${env.APP_PACKAGE} -v 500"
+                    bat "adb shell monkey -p ${env.APP_PACKAGE} --throttle 500 -v 300"
 
-                    sleep 30
+                    sleep 20
 
                     bat """
                     @curl -s -X POST ^
@@ -151,10 +137,8 @@ pipeline {
         // ================= CLEANUP =================
         stage('Cleanup') {
             steps {
-                bat """
-                taskkill /F /IM emulator.exe /T || echo emulator stopped
-                adb kill-server || echo adb stopped
-                """
+                bat 'taskkill /F /IM emulator.exe /T || echo emulator stopped'
+                bat 'adb kill-server || echo adb stopped'
             }
         }
     }
