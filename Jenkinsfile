@@ -28,7 +28,7 @@ pipeline {
         AVD_NAME     = "Pixel_4_XL"
 
         // ================== NewCity ==================
-        APK_PATH     = "D:\\GitHub\\NewCity-Mobile-FE\\build\\app\\outputs\\flutter-apk\\newcity-testing.apk"
+        APK_PATH     = "test-apk/newcity-testing.apk"
         APP_PACKAGE = "com.dhilla.newcity"
 
         MOBSF_URL    = "http://localhost:8000"
