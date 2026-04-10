@@ -1,5 +1,15 @@
 import groovy.json.JsonSlurperClassic
 
+// ================= HELPER =================
+@NonCPS
+def cleanJsonString(String rawOutput) {
+    int firstBrace = rawOutput.indexOf('{')
+    int lastBrace  = rawOutput.lastIndexOf('}')
+    if (firstBrace == -1 || lastBrace == -1) return null
+    return rawOutput.substring(firstBrace, lastBrace + 1).trim()
+}
+
+// ================= PIPELINE =================
 pipeline {
     agent any
 
@@ -11,7 +21,6 @@ pipeline {
 
         AVD_NAME     = "Pixel_4_XL"
 
-        // 🔥 APK dari repo (bukan build)
         APK_PATH     = "test-apk/newcity-testing.apk"
         APP_PACKAGE  = "com.dhilla.newcity"
 
@@ -20,11 +29,14 @@ pipeline {
     }
 
     stages {
+
+        // ================= VERSION CHECK =================
         stage('CHECK VERSION') {
             steps {
-                echo "USING NEW PIPELINE VERSION"
+                echo "🚀 FINAL PIPELINE VERSION - JSON PARSING FIX"
             }
         }
+
         // ================= CHECKOUT =================
         stage('Checkout') {
             steps {
@@ -33,7 +45,7 @@ pipeline {
             }
         }
 
-        // ================= DEBUG (WAJIB biar gak halu) =================
+        // ================= DEBUG =================
         stage('Debug APK Path') {
             steps {
                 bat 'echo === SEARCH APK ==='
@@ -57,11 +69,10 @@ pipeline {
         stage('SAST - MobSF') {
             steps {
                 script {
-                    echo "Uploading APK..."
+                    echo "📤 Uploading APK to MobSF..."
 
                     def uploadResponse = bat(
                         script: """
-                        @echo === CURL RESPONSE ===
                         curl ^
                         -H "Authorization: ${env.MOBSF_TOKEN}" ^
                         -F "file=@${env.APK_PATH}" ^
@@ -70,16 +81,27 @@ pipeline {
                         returnStdout: true
                     ).trim()
 
-                    echo "UPLOAD RESPONSE: ${uploadResponse}"
+                    echo "RAW RESPONSE: ${uploadResponse}"
 
-                    def matcher = uploadResponse =~ /"hash"\\s*:\\s*"([^"]+)"/
-                    if (!matcher.find()) error "❌ Upload failed"
+                    // 🔥 CLEAN + PARSE JSON
+                    def jsonClean = cleanJsonString(uploadResponse)
 
-                    env.APK_HASH = matcher.group(1)
-                    echo "APK HASH: ${env.APK_HASH}"
+                    if (!jsonClean) {
+                        error "❌ Failed to extract JSON from response"
+                    }
 
+                    def parsed = new JsonSlurperClassic().parseText(jsonClean)
+
+                    if (!parsed.hash) {
+                        error "❌ Upload failed - no hash returned"
+                    }
+
+                    env.APK_HASH = parsed.hash
+                    echo "✅ APK HASH: ${env.APK_HASH}"
+
+                    // Trigger static scan
                     bat """
-                    @curl -s -X POST ^
+                    curl -X POST ^
                     -H "Authorization: ${env.MOBSF_TOKEN}" ^
                     --data "hash=${env.APK_HASH}" ^
                     ${env.MOBSF_URL}/api/v1/scan
@@ -118,8 +140,10 @@ pipeline {
         stage('DAST - MobSF') {
             steps {
                 script {
+                    echo "🚀 Starting Dynamic Analysis..."
+
                     bat """
-                    @curl -s -X POST ^
+                    curl -X POST ^
                     -H "Authorization: ${env.MOBSF_TOKEN}" ^
                     --data "hash=${env.APK_HASH}" ^
                     ${env.MOBSF_URL}/api/v1/dynamic/start_analysis
@@ -132,11 +156,13 @@ pipeline {
                     sleep 20
 
                     bat """
-                    @curl -s -X POST ^
+                    curl -X POST ^
                     -H "Authorization: ${env.MOBSF_TOKEN}" ^
                     --data "hash=${env.APK_HASH}" ^
                     ${env.MOBSF_URL}/api/v1/dynamic/stop_analysis
                     """
+
+                    echo "✅ DAST completed"
                 }
             }
         }
@@ -146,6 +172,7 @@ pipeline {
             steps {
                 bat 'taskkill /F /IM emulator.exe /T || echo emulator stopped'
                 bat 'adb kill-server || echo adb stopped'
+                echo "🧹 Cleanup done"
             }
         }
     }
