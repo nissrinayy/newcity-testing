@@ -20,7 +20,11 @@ pipeline {
     }
 
     stages {
-
+        stage('CHECK VERSION') {
+            steps {
+                echo "USING NEW PIPELINE VERSION"
+            }
+        }
         // ================= CHECKOUT =================
         stage('Checkout') {
             steps {
