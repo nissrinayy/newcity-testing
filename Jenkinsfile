@@ -145,8 +145,12 @@ pipeline {
         // ================= INSTALL APK =================
         stage('Install APK') {
             steps {
-                bat "adb uninstall ${env.APP_PACKAGE} || echo not installed"
-                bat "adb install -r \"${env.APK_PATH}\""
+                bat """
+                adb uninstall ${env.APP_PACKAGE} || echo not installed
+                exit /b 0
+                """
+
+                bat "adb install -r ${env.APK_PATH}"
                 echo "✅ APK installed"
             }
         }
