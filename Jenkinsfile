@@ -34,8 +34,13 @@ pipeline {
         MOBSF_URL    = "http://localhost:8000"
         MOBSF_TOKEN  = "67f8dcdbaf63751750653685407053c3e1762a3394c5833de1d00379ca06c0fe"
     }
-
+    
     stages {
+        stage('Clean Workspace') {
+            steps {
+                deleteDir()
+            }
+        }
         // ================= VALIDATE APK =================
         stage('Validate APK') {
             steps {
