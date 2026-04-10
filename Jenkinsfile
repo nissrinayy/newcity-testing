@@ -61,13 +61,16 @@ pipeline {
 
                     def uploadResponse = bat(
                         script: """
-                        @curl -s ^
+                        @echo === CURL RESPONSE ===
+                        curl ^
                         -H "Authorization: ${env.MOBSF_TOKEN}" ^
                         -F "file=@${env.APK_PATH}" ^
                         ${env.MOBSF_URL}/api/v1/upload
                         """,
                         returnStdout: true
                     ).trim()
+
+                    echo "UPLOAD RESPONSE: ${uploadResponse}"
 
                     def matcher = uploadResponse =~ /"hash"\\s*:\\s*"([^"]+)"/
                     if (!matcher.find()) error "❌ Upload failed"
