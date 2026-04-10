@@ -73,7 +73,7 @@ pipeline {
 
                     def uploadResponse = bat(
                         script: """
-                        curl ^
+                        @curl -s ^
                         -H "Authorization: ${env.MOBSF_TOKEN}" ^
                         -F "file=@${env.APK_PATH}" ^
                         ${env.MOBSF_URL}/api/v1/upload
@@ -83,29 +83,44 @@ pipeline {
 
                     echo "RAW RESPONSE: ${uploadResponse}"
 
-                    // 🔥 CLEAN + PARSE JSON
-                    def jsonClean = cleanJsonString(uploadResponse)
+                    // ================= FIX: NO JsonSlurper =================
+                    def clean = uploadResponse.replaceAll("(?s).*?(\\{.*\\}).*", "\$1")
 
-                    if (!jsonClean) {
-                        error "❌ Failed to extract JSON from response"
+                    def hashMatch = clean =~ /"hash"\\s*:\\s*"([a-f0-9]+)"/
+
+                    if (!hashMatch.find()) {
+                        error "❌ Upload failed"
                     }
 
-                    def parsed = new JsonSlurperClassic().parseText(jsonClean)
-
-                    if (!parsed.hash) {
-                        error "❌ Upload failed - no hash returned"
-                    }
-
-                    env.APK_HASH = parsed.hash
+                    env.APK_HASH = hashMatch.group(1)
                     echo "✅ APK HASH: ${env.APK_HASH}"
 
-                    // Trigger static scan
+                    // ================= SCAN =================
                     bat """
-                    curl -X POST ^
+                    @curl -s -X POST ^
                     -H "Authorization: ${env.MOBSF_TOKEN}" ^
                     --data "hash=${env.APK_HASH}" ^
                     ${env.MOBSF_URL}/api/v1/scan
                     """
+
+                    // ================= GET REPORT =================
+                    def raw = bat(
+                        script: """
+                        @curl -s -X POST ^
+                        -H "Authorization: ${env.MOBSF_TOKEN}" ^
+                        --data "hash=${env.APK_HASH}" ^
+                        ${env.MOBSF_URL}/api/v1/report_json
+                        """,
+                        returnStdout: true
+                    ).trim()
+
+                    def json = cleanJsonString(raw)
+
+                    if (json) {
+                        writeFile file: 'sast_report_newcity.json', text: json
+                        archiveArtifacts artifacts: 'sast_report_newcity.json'
+                        echo "✅ SAST done"
+                    }
                 }
             }
         }
