@@ -86,13 +86,13 @@ pipeline {
                     // ================= FIX: NO JsonSlurper =================
                     def clean = uploadResponse.replaceAll("(?s).*?(\\{.*\\}).*", "\$1")
 
-                    def hashMatch = uploadResponse =~ /hash"\s*:\s*"([^"]+)"/
+                    def hashValue = clean.replaceAll(/.*"hash"\s*:\s*"([^"]+)".*/, "\$1")
 
-                    if (!hashMatch.find()) {
+                    if (hashValue == clean) {
                         error "❌ Upload failed"
                     }
 
-                    env.APK_HASH = hashMatch.group(1)
+                    env.APK_HASH = hashValue
                     echo "✅ APK HASH: ${env.APK_HASH}"
 
                     // ================= SCAN =================
